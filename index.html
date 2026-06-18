@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#008080" />
+    <title>Codex/32 Workbench</title>
+    <link rel="stylesheet" href="styles.css?v=0.3.3" />
+  </head>
+  <body>
+    <div class="desktop" id="desktop">
+      <header class="window app-window">
+        <div class="titlebar">
+          <div class="title"><span class="app-icon" aria-hidden="true">C:\</span> CODEX/32 WORKBENCH</div>
+          <div class="window-controls" aria-label="Window controls">
+            <button title="Minimize">_</button><button title="Maximize">□</button><button title="Close">×</button>
+          </div>
+        </div>
+        <nav class="menubar" aria-label="Application menu">
+          <button data-menu="file"><u>F</u>ile</button><button data-menu="edit"><u>E</u>dit</button>
+          <button data-menu="view"><u>V</u>iew</button><button data-menu="agent"><u>A</u>gent</button>
+          <button data-action="about"><u>H</u>elp</button>
+        </nav>
+        <div class="menu-popup hidden" id="menu-popup" role="menu"></div>
+
+        <div class="toolbar">
+          <button data-action="new-thread" title="New thread"><span>▧</span> New</button>
+          <button data-action="connect" title="Connection settings"><span>⇄</span> Link</button>
+          <button data-action="fork-thread" title="Fork current thread"><span>⑂</span> Fork</button>
+          <button data-action="review" title="Review uncommitted changes"><span>✓</span> Review</button>
+          <span class="separator"></span>
+          <button data-action="toggle-tree"><span>▤</span> Files</button>
+          <button data-action="toggle-terminal"><span>&gt;_</span> Terminal</button>
+          <button data-action="automations"><span>⌚</span> Automations</button>
+          <button data-action="resources"><span>⌘</span> Resources</button>
+          <button data-action="settings"><span>⚙</span> Settings</button>
+          <span class="toolbar-spacer"></span>
+          <label class="model-label">MODEL <select id="model"><option value="">default</option></select></label>
+        </div>
+
+        <main class="workbench">
+          <aside class="panel explorer" id="explorer">
+            <div class="panel-title"><span>PROJECTS</span><button class="panel-action" data-action="open-project">Open...</button></div>
+            <div class="thread-search"><input id="thread-search" placeholder="Find projects or chats..." /><button data-action="refresh-threads" title="Refresh">↻</button></div>
+            <div class="project-list" id="project-list"><div class="empty-state">CONNECT TO LOAD PROJECTS</div></div>
+            <div class="project-files" id="project-files" hidden>
+              <div class="subsection-title">PROJECT FILES <button data-action="toggle-tree">×</button></div>
+              <div class="path-box" id="workspace-path">C:\CODEX\PROJECT</div>
+              <div class="tree" role="tree"></div>
+            </div>
+            <div class="panel-title chats-title">CHATS</div>
+            <div class="chat-list" id="chat-list"><div class="empty-state">NO RECENT CHATS</div></div>
+            <div class="thread-actions"><button data-action="rename-thread">Rename</button><button data-action="archive-thread">Archive</button></div>
+          </aside>
+
+          <section class="panel conversation">
+            <div class="panel-title conversation-title">
+              <span>AGENT CONSOLE // SESSION <span id="session-id">LOCAL-DEMO</span></span>
+              <span class="activity"><i></i><span id="activity-label">READY</span></span>
+            </div>
+            <div class="document-tabs" role="tablist"><button class="selected" data-view="chat">Conversation</button><button data-view="changes">Changes <span id="change-count">0</span></button><button data-view="diagnostics">Activity</button></div>
+            <div class="transcript" id="transcript" aria-live="polite">
+              <article class="message system-message">
+                <div class="message-gutter">SYS<br />00:00</div>
+                <div class="message-body"><div class="message-label">CODEX/32 SYSTEM</div><p>Workbench initialized. All systems nominal.</p><p class="muted">Connect to a Codex app-server or continue in demonstration mode.</p></div>
+              </article>
+              <article class="message agent-message">
+                <div class="message-gutter">CDX<br />00:01</div>
+                <div class="message-body"><div class="message-label">CODEX AGENT</div><p>Ready for instructions. I can inspect files, edit code, run commands, and report the results here.</p></div>
+              </article>
+            </div>
+            <form class="composer" id="composer">
+              <div class="composer-label"><span>COMMAND INPUT</span><span>CTRL+ENTER TO EXECUTE</span></div>
+              <textarea id="prompt" rows="3" placeholder="Type an instruction for Codex..." aria-label="Instruction"></textarea>
+              <div class="attachment-strip" id="attachment-strip" hidden></div><input id="attachment-input" type="file" accept="image/*" multiple hidden />
+              <div class="composer-controls">
+                <button type="button" data-action="attach">＋ Attach</button>
+                <label>MODE <select id="mode"><option value="default">Agent</option><option value="plan">Plan</option></select></label>
+                <label>EFFORT <select id="effort"><option value="">default</option><option>low</option><option>medium</option><option>high</option><option>xhigh</option></select></label>
+                <span class="mode"><span class="led green"></span> <span id="composer-mode">AGENT MODE</span></span>
+                <button class="stop-button" type="button" data-action="interrupt" hidden>■ STOP</button><button class="default-button send-button" type="submit">▶ EXECUTE</button>
+              </div>
+            </form>
+          </section>
+
+          <aside class="panel inspector">
+            <div class="panel-title">SYSTEM MONITOR</div>
+            <dl class="meters">
+              <div><dt>CONTEXT</dt><dd><span style="width:28%"></span></dd><small>28% USED</small></div>
+              <div><dt>SESSION</dt><dd><span style="width:63%"></span></dd><small>00:18:42</small></div>
+            </dl>
+            <div class="panel-title">TASK QUEUE</div>
+            <ol class="task-list" id="task-list">
+              <li class="done"><span>✓</span> Initialize workbench</li><li class="active"><span>►</span> Await instruction</li><li><span>□</span> Verify changes</li>
+            </ol>
+            <div class="panel-title">PERMISSIONS</div>
+            <div class="permissions"><p><span class="led green"></span> <span id="sandbox-label">WORKSPACE WRITE</span></p><p><span class="led amber"></span> <span id="approval-label">ON REQUEST</span></p><p><span class="led red"></span> SYSTEM PROTECTED</p></div>
+            <div class="panel-title">GIT STATUS</div>
+            <div class="git-status"><p>BRANCH</p><b id="git-branch">UNKNOWN</b><p class="git-clean" id="git-state">● READY</p></div>
+            <div class="panel-title">ACCOUNT</div><div class="account-card" id="account-card">NOT CONNECTED</div>
+          </aside>
+        </main>
+
+        <section class="terminal panel" id="terminal" hidden>
+          <div class="panel-title"><span>INTEGRATED TERMINAL</span><button data-action="toggle-terminal">×</button></div>
+          <pre id="terminal-output">Microsoft(R) Codex/32 Command Processor
+C:\CODEX\PROJECT&gt;</pre><form id="terminal-form"><span>C:\&gt;</span><input id="terminal-input" autocomplete="off" placeholder="Enter shell command" /><button>Run</button></form>
+        </section>
+
+        <footer class="statusbar">
+          <span class="status-cell connection"><i class="led amber" id="connection-led"></i><span id="connection-label">DEMO MODE</span></span>
+          <button class="status-cell command-palette" data-action="palette">⌘ COMMANDS</button><span class="status-cell" id="status-model">MODEL: DEFAULT</span><span class="status-cell" id="status-context">TOKENS: --</span>
+          <span class="status-cell clock" id="clock">00:00</span>
+        </footer>
+      </header>
+    </div>
+
+    <dialog id="connect-dialog">
+      <div class="titlebar"><div class="title">⇄ CONNECTION PROPERTIES</div><button data-close="connect-dialog">×</button></div>
+      <form method="dialog" id="connection-form" class="dialog-body">
+        <fieldset><legend>Codex app-server</legend><label>Transport<input id="server-url" value="local://stdio" /></label><small>Recommended: local://stdio launches Codex through the built-in bridge.</small></fieldset>
+        <fieldset><legend>Working directory</legend><label>Project path<input id="cwd" /></label></fieldset>
+        <div class="dialog-actions"><button value="cancel">Cancel</button><button class="default-button" value="connect" id="connect-submit">Connect</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="about-dialog">
+      <div class="titlebar"><div class="title">C:\ ABOUT CODEX/32</div><button data-close="about-dialog">×</button></div>
+      <div class="dialog-body about"><div class="big-logo">C:\<span>32</span></div><div><h1>CODEX/32</h1><p>Developer Workbench</p><p>Version 0.3 · Conventional memory: 640K</p><p class="muted">A retro interface for the open-source Codex engine.</p></div></div>
+      <div class="dialog-actions"><button class="default-button" data-close="about-dialog">OK</button></div>
+    </dialog>
+
+    <dialog id="approval-dialog">
+      <div class="titlebar warning"><div class="title">⚠ CONFIRM OPERATION</div></div>
+      <div class="dialog-body"><p>Codex requests permission to execute:</p><pre id="approval-command">command</pre><p id="approval-reason" class="muted"></p></div>
+      <div class="dialog-actions"><button data-approval="decline">Deny</button><button data-approval="acceptForSession">Allow session</button><button class="default-button" data-approval="accept">Allow once</button></div>
+    </dialog>
+    <dialog id="settings-dialog">
+      <div class="titlebar"><div class="title">⚙ CODEX/32 CONTROL PANEL</div><button data-close="settings-dialog">×</button></div>
+      <form method="dialog" id="settings-form" class="dialog-body">
+        <fieldset><legend>Agent defaults</legend><label>Sandbox<select id="sandbox"><option value="read-only">Read only</option><option value="workspace-write" selected>Workspace write</option><option value="danger-full-access">Full access</option></select></label><label>Approvals<select id="approval-policy"><option value="untrusted">Untrusted only</option><option value="on-failure">On failure</option><option value="on-request" selected>On request</option><option value="never">Never</option></select></label><label>Personality<select id="personality"><option value="">Default</option><option value="friendly">Friendly</option><option value="pragmatic">Pragmatic</option></select></label></fieldset>
+        <fieldset><legend>Thread operations</legend><button type="button" data-action="rollback">Rollback last turn</button> <button type="button" data-action="compact">Compact context</button></fieldset>
+        <div class="dialog-actions"><button value="cancel">Cancel</button><button value="save" class="default-button">Apply</button></div>
+      </form>
+    </dialog>
+    <dialog id="resources-dialog" class="wide-dialog">
+      <div class="titlebar"><div class="title">⌘ RESOURCE MANAGER</div><button data-close="resources-dialog">×</button></div>
+      <div class="resource-tabs"><button data-resource="skills" class="selected">Skills</button><button data-resource="plugins">Plugins</button><button data-resource="apps">Apps</button><button data-resource="mcp">MCP Servers</button><button data-resource="config">Configuration</button></div>
+      <div class="resource-list" id="resource-list"><div class="empty-state">SELECT A RESOURCE CLASS</div></div>
+      <div class="dialog-actions"><button data-close="resources-dialog">Close</button></div>
+    </dialog>
+    <dialog id="automations-dialog" class="wide-dialog">
+      <div class="titlebar"><div class="title">⌚ AUTOMATION MANAGER</div><button data-close="automations-dialog">×</button></div>
+      <div class="dialog-body automation-manager">
+        <p>Automations are managed by Codex through its automation tool. Choose a task to open a dedicated manager chat in the current project.</p>
+        <div class="automation-actions">
+          <button data-automation="list">View automations</button>
+          <button data-automation="create">Create automation</button>
+          <button data-automation="troubleshoot">Fix an automation</button>
+        </div>
+        <small>Codex will show the schedule and ask only for details it cannot infer. Creating an automation and running it are separate actions.</small>
+      </div>
+      <div class="dialog-actions"><button data-close="automations-dialog">Close</button></div>
+    </dialog>
+    <dialog id="text-dialog">
+      <div class="titlebar"><div class="title" id="text-dialog-title">ENTER VALUE</div><button data-close="text-dialog">×</button></div>
+      <form method="dialog" id="text-form" class="dialog-body"><label id="text-label">Value<input id="text-value" /></label><div class="dialog-actions"><button value="cancel">Cancel</button><button value="confirm" class="default-button">OK</button></div></form>
+    </dialog>
+    <dialog id="palette-dialog">
+      <div class="titlebar"><div class="title">⌘ COMMAND CENTER</div><button data-close="palette-dialog">×</button></div>
+      <div class="dialog-body"><input id="palette-search" class="full-input" placeholder="Type a command..." /><div class="palette-list" id="palette-list"></div></div>
+    </dialog>
+    <script type="module" src="app.js?v=0.3.3"></script>
+  </body>
+</html>
