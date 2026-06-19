@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#008080" />
     <title>Codex/32 Workbench</title>
-    <link rel="stylesheet" href="styles.css?v=0.3.3" />
+    <link rel="stylesheet" href="styles.css?v=0.3.4" />
   </head>
   <body>
     <div class="desktop" id="desktop">
@@ -58,7 +58,7 @@
               <span>AGENT CONSOLE // SESSION <span id="session-id">LOCAL-DEMO</span></span>
               <span class="activity"><i></i><span id="activity-label">READY</span></span>
             </div>
-            <div class="document-tabs" role="tablist"><button class="selected" data-view="chat">Conversation</button><button data-view="changes">Changes <span id="change-count">0</span></button><button data-view="diagnostics">Activity</button></div>
+            <div class="document-tabs" role="tablist"><button class="selected" data-view="chat">Conversation</button><button data-view="file">File</button><button data-view="changes">Changes <span id="change-count">0</span></button><button data-view="diagnostics">Activity</button></div>
             <div class="transcript" id="transcript" aria-live="polite">
               <article class="message system-message">
                 <div class="message-gutter">SYS<br />00:00</div>
@@ -69,6 +69,10 @@
                 <div class="message-body"><div class="message-label">CODEX AGENT</div><p>Ready for instructions. I can inspect files, edit code, run commands, and report the results here.</p></div>
               </article>
             </div>
+            <section class="file-viewer" id="file-viewer" hidden aria-label="File viewer">
+              <div class="file-viewer-path"><span>OPEN FILE</span><code id="file-viewer-path">Select a file from Project Files</code></div>
+              <pre id="file-viewer-content">No file selected.</pre>
+            </section>
             <form class="composer" id="composer">
               <div class="composer-label"><span>COMMAND INPUT</span><span>CTRL+ENTER TO EXECUTE</span></div>
               <textarea id="prompt" rows="3" placeholder="Type an instruction for Codex..." aria-label="Instruction"></textarea>
@@ -86,8 +90,8 @@
           <aside class="panel inspector">
             <div class="panel-title">SYSTEM MONITOR</div>
             <dl class="meters">
-              <div><dt>CONTEXT</dt><dd><span style="width:28%"></span></dd><small>28% USED</small></div>
-              <div><dt>SESSION</dt><dd><span style="width:63%"></span></dd><small>00:18:42</small></div>
+              <div><dt>CONTEXT</dt><dd><span id="context-meter" style="width:0%"></span></dd><small id="context-label">AWAITING DATA</small></div>
+              <div><dt>SESSION</dt><dd><span id="session-meter" style="width:0%"></span></dd><small id="session-timer">00:00:00</small></div>
             </dl>
             <div class="panel-title">TASK QUEUE</div>
             <ol class="task-list" id="task-list">
@@ -170,6 +174,6 @@ C:\CODEX\PROJECT&gt;</pre><form id="terminal-form"><span>C:\&gt;</span><input id
       <div class="titlebar"><div class="title">⌘ COMMAND CENTER</div><button data-close="palette-dialog">×</button></div>
       <div class="dialog-body"><input id="palette-search" class="full-input" placeholder="Type a command..." /><div class="palette-list" id="palette-list"></div></div>
     </dialog>
-    <script type="module" src="app.js?v=0.3.3"></script>
+    <script type="module" src="app.js?v=0.3.4"></script>
   </body>
 </html>

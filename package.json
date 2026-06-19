@@ -1,10 +1,60 @@
 {
   "name": "codex-32-workbench",
+  "description": "A retro Windows-style desktop workbench for the local Codex coding agent.",
+  "author": "Jagatees",
   "private": false,
   "version": "0.3.2",
   "type": "module",
+  "main": "electron-main.cjs",
   "scripts": {
+    "start": "node server.mjs --open",
+    "desktop": "electron .",
     "dev": "node server.mjs",
-    "check": "node --check app.js && node --check server.mjs"
+    "check": "node --check app.js && node --check server.mjs && node --check electron-main.cjs",
+    "test": "node --test tests/*.test.mjs",
+    "dist:win": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac dmg zip"
+  },
+  "build": {
+    "appId": "com.jagatees.codex32",
+    "productName": "Codex 32 Workbench",
+    "asar": true,
+    "asarUnpack": [
+      "app.js",
+      "codex32-preview.png",
+      "index.html",
+      "server.mjs",
+      "styles.css"
+    ],
+    "electronDist": "node_modules/electron/dist",
+    "files": [
+      "app.js",
+      "codex32-preview.png",
+      "electron-main.cjs",
+      "index.html",
+      "server.mjs",
+      "styles.css",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    }
+  },
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3"
   }
 }

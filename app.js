@@ -6,6 +6,8 @@ const state = {
   approval: null, textAction: null, currentView: "chat", cwd: "", account: null,
   turnHadAgent: false, attachments: [],
   expandedProjects: new Set(), projectLimits: new Map(), chatLimit: 8,
+  resourceLoadId: 0,
+  sessionStartedAt: Date.now(),
 };
 
 const commands = [
@@ -32,6 +34,11 @@ function errorMessage(error) {
 function setActivity(label, busy = false) { $("#activity-label").textContent = label; $(".activity").classList.toggle("busy", busy); $(".stop-button").hidden = !busy; $(".send-button").hidden = busy; }
 function setConnection(label, kind = "amber") { $("#connection-label").textContent = label; $("#connection-led").className = `led ${kind}`; }
 function logActivity(text) { addMessage("diagnostic", "EVENT LOG", text); }
+function setButtonBusy(button, busy) {
+  if (!button) return;
+  button.classList.toggle("is-loading", busy); button.disabled = busy;
+  if (busy) button.setAttribute("aria-busy", "true"); else button.removeAttribute("aria-busy");
+}
 
 function request(method, params = {}) {
   if (!state.connected) return Promise.reject(new Error("Not connected"));
@@ -48,6 +55,7 @@ function notify(method, params = {}) {
 }
 
 async function connect() {
+  setButtonBusy($("#connect-submit"), true);
   if (state.socket) { state.socket.onclose = null; state.socket.close(); }
   if (state.events) { state.events.onerror = null; state.events.close(); }
   setConnection("CONNECTING...", "amber"); setActivity("LINKING", true);
@@ -72,10 +80,15 @@ async function initializeConnection() {
     await request("initialize", { clientInfo: { name: "codex_32bit", title: "Codex/32 Workbench", version: "0.3.2" }, capabilities: { experimentalApi: true } });
     await notify("initialized"); setConnection("APP-SERVER ONLINE", "green"); setActivity("READY");
     addMessage("system", "LINK MANAGER", "Codex app-server connected. Loading desktop services...");
-    await loadDesktop();
+    await loadDesktop(); setButtonBusy($("#connect-submit"), false);
   } catch (error) { connectionFailed(error); }
 }
-function disconnect() { state.connected = false; state.threadId = null; setConnection("DEMO MODE", "amber"); setActivity("READY"); }
+function disconnect() {
+  state.connected = false; state.threadId = null; state.approval = null;
+  if ($("#approval-dialog").open) $("#approval-dialog").close();
+  setConnection("DEMO MODE", "amber"); setActivity("READY"); setButtonBusy($("#connect-submit"), false);
+  $("#context-meter").style.width = "0%"; $("#context-label").textContent = "AWAITING DATA";
+}
 function connectionFailed(error) { disconnect(); setConnection("LINK FAILED", "red"); addMessage("system", "LINK ERROR", error.message); }
 
 async function loadDesktop() {
@@ -138,6 +151,7 @@ async function resumeThread(threadId) {
 }
 function activateThread(thread, response = {}) {
   state.threadId = thread.id; state.turnId = null; state.cwd = response.cwd || thread.cwd || state.cwd; $("#session-id").textContent = thread.id.slice(0, 12).toUpperCase();
+  state.sessionStartedAt = Date.now();
   state.expandedProjects.add(state.cwd);
   $("#workspace-path").textContent = state.cwd; $("#git-branch").textContent = thread.gitInfo?.branch || "NO BRANCH";
   $("#cwd").value = state.cwd; syncThreadActivity(thread); renderThreads(); loadProjectFiles();
@@ -237,7 +251,25 @@ function handleMessage(message) {
   if (message.method === "bridge/exit") connectionFailed(new Error(`Codex exited (${p.code ?? "unknown"})`));
 }
 function appendDelta(id, delta, kind, label) { let node = state.streams.get(id); if (!node) { node = addMessage(kind, label, "", id); state.streams.set(id, node); } node.textContent += delta; node.closest("article").scrollIntoView({ block: "end" }); }
-function renderUsage(usage) { const total = usage?.total?.totalTokens ?? usage?.totalTokens ?? usage?.total_tokens; if (total != null) $("#status-context").textContent = `TOKENS: ${Number(total).toLocaleString()}`; }
+function renderUsage(usage) {
+  const total = usage?.total?.totalTokens ?? usage?.totalTokens ?? usage?.total_tokens;
+  if (total == null) return;
+  $("#status-context").textContent = `TOKENS: ${Number(total).toLocaleString()}`;
+  const windowSize = usage?.modelContextWindow ?? usage?.model_context_window ?? usage?.contextWindow;
+  if (windowSize) {
+    const percent = Math.min(100, Math.round(Number(total) / Number(windowSize) * 100));
+    $("#context-meter").style.width = `${percent}%`; $("#context-label").textContent = `${percent}% USED`;
+  } else { $("#context-label").textContent = `${Number(total).toLocaleString()} TOKENS`; }
+}
+
+function updateSessionTimer() {
+  const seconds = Math.max(0, Math.floor((Date.now() - state.sessionStartedAt) / 1000));
+  const hours = String(Math.floor(seconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor(seconds % 3600 / 60)).padStart(2, "0");
+  const remainder = String(seconds % 60).padStart(2, "0");
+  $("#session-timer").textContent = `${hours}:${minutes}:${remainder}`;
+  $("#session-meter").style.width = `${Math.min(100, seconds / 36)}%`;
+}
 
 function showApproval(message) { state.approval = message; $("#approval-command").textContent = message.params.command || message.params.reason || "Apply workspace file changes"; $("#approval-reason").textContent = message.params.reason || "This operation requires confirmation."; $("#approval-dialog").showModal(); }
 async function resolveApproval(decision) { if (!state.approval) return; await sendServerResponse(state.approval.id, { decision }); state.approval = null; $("#approval-dialog").close(); }
@@ -271,10 +303,21 @@ async function runThreadAction(name) {
   } catch (error) { addMessage("system", "OPERATION ERROR", error.message); setActivity("READY"); }
 }
 
-async function runShell(event) { event.preventDefault(); const input = $("#terminal-input"); const command = input.value.trim(); if (!command || !state.threadId) return; input.value = ""; $("#terminal-output").textContent += `\nC:\\> ${command}\n`; await request("thread/shellCommand", { threadId: state.threadId, command }); }
+async function runShell(event) {
+  event.preventDefault(); const input = $("#terminal-input"); const command = input.value.trim();
+  if (!command || !state.threadId) return;
+  input.value = ""; $("#terminal-output").textContent += `\nC:\\> ${command}\n`;
+  try { await request("thread/shellCommand", { threadId: state.threadId, command }); }
+  catch (error) { $("#terminal-output").textContent += `ERROR: ${errorMessage(error)}\n`; }
+}
 function tabButtons() { return $$('.document-tabs [data-view]'); }
-function switchView(view) { state.currentView = view; tabButtons().forEach((button) => button.classList.toggle("selected", button.dataset.view === view)); applyView(); $("#transcript").scrollTop = 0; }
+function switchView(view) {
+  state.currentView = view; tabButtons().forEach((button) => button.classList.toggle("selected", button.dataset.view === view));
+  const viewingFile = view === "file"; $("#transcript").hidden = viewingFile; $("#file-viewer").hidden = !viewingFile; $("#composer").hidden = viewingFile;
+  applyView(); $("#transcript").scrollTop = 0;
+}
 function applyView() {
+  if (state.currentView === "file") return;
   const messages = $$("#transcript .message");
   let visibleCount = 0;
   messages.forEach((message) => {
@@ -290,18 +333,29 @@ function applyView() {
 }
 
 async function loadResources(kind) {
+  const loadId = ++state.resourceLoadId;
   const list = $("#resource-list"); list.innerHTML = '<div class="empty-state">SCANNING...</div>'; $$('[data-resource]').forEach((button) => button.classList.toggle("selected", button.dataset.resource === kind));
   try {
     let rows = [];
     if (kind === "skills") { const result = await request("skills/list", { cwds: [state.cwd], forceReload: false }); rows = result.data.flatMap((entry) => entry.skills || entry); }
     if (kind === "plugins") { const result = await request("plugin/list", { cwds: [state.cwd] }); rows = result.marketplaces.flatMap((market) => market.plugins || market.entries || [market]); }
     if (kind === "apps") { const result = await request("app/list", { limit: 100, threadId: state.threadId, forceRefetch: false }); rows = result.data; }
-    if (kind === "mcp") { const result = await request("mcpServerStatus/list", { detail: "full", threadId: state.threadId }); rows = result.data; }
+    if (kind === "mcp") { const result = await request("mcpServerStatus/list", { detail: "toolsAndAuthOnly", threadId: state.threadId }); rows = result.data.map((server) => ({ ...server, resourceType: "mcp" })); }
     if (kind === "config") { const result = await request("config/read", { includeLayers: false }); rows = Object.entries(result.config).map(([name, value]) => ({ name, description: typeof value === "object" ? JSON.stringify(value) : String(value) })); }
+    if (loadId !== state.resourceLoadId) return;
     list.innerHTML = rows.length ? rows.slice(0, 100).map(resourceRow).join("") : '<div class="empty-state">NO ITEMS FOUND</div>';
-  } catch (error) { list.innerHTML = `<div class="empty-state error">${escapeText(error.message)}</div>`; }
+  } catch (error) { if (loadId === state.resourceLoadId) list.innerHTML = `<div class="empty-state error">${escapeText(error.message)}</div>`; }
 }
-function resourceRow(item) { const name = item.name || item.id || item.serverName || item.displayName || "Resource"; const detail = item.description || item.status || item.path || item.authStatus || "Available"; return `<div class="resource-row"><span class="resource-icon">▣</span><div><b>${escapeText(name)}</b><small>${escapeText(typeof detail === "string" ? detail : JSON.stringify(detail))}</small></div></div>`; }
+function resourceRow(item) {
+  const name = item.name || item.id || item.serverName || item.displayName || "Resource";
+  if (item.resourceType === "mcp") {
+    const tools = Object.values(item.tools || {});
+    const toolRows = tools.map((tool) => `<li><b>${escapeText(tool.title || tool.name)}</b>${tool.description ? `<span>${escapeText(tool.description)}</span>` : ""}</li>`).join("");
+    return `<div class="resource-row mcp-resource"><span class="resource-icon">▣</span><div><b>${escapeText(name)}</b><small>AUTH: ${escapeText(item.authStatus || "unknown")} | ${tools.length} TOOLS</small><details><summary>Show tool details</summary><ul>${toolRows || "<li>No tools reported</li>"}</ul></details></div></div>`;
+  }
+  const detail = item.description || item.status || item.path || item.authStatus || "Available";
+  return `<div class="resource-row"><span class="resource-icon">▣</span><div><b>${escapeText(name)}</b><small>${escapeText(typeof detail === "string" ? detail : JSON.stringify(detail))}</small></div></div>`;
+}
 
 const automationPrompts = {
   list: "Use the automation tools to list my current automations. Show each schedule, project folder, enabled state, model, and next run time. Do not change anything.",
@@ -318,17 +372,27 @@ async function openAutomationManager(kind) {
 }
 
 function addAttachments(files) {
-  [...files].forEach((file) => { const reader = new FileReader(); reader.onload = () => { state.attachments.push({ name: file.name, url: reader.result }); renderAttachments(); }; reader.readAsDataURL(file); });
+  [...files].forEach((file) => {
+    if (!file.type.startsWith("image/")) return addMessage("system", "ATTACHMENT ERROR", `${file.name} is not an image.`);
+    if (file.size > 20 * 1024 * 1024) return addMessage("system", "ATTACHMENT ERROR", `${file.name} is larger than 20 MB.`);
+    const reader = new FileReader(); reader.onerror = () => addMessage("system", "ATTACHMENT ERROR", `Could not read ${file.name}.`);
+    reader.onload = () => { state.attachments.push({ name: file.name, url: reader.result }); renderAttachments(); };
+    reader.readAsDataURL(file);
+  });
 }
 function renderAttachments() {
   const strip = $("#attachment-strip"); strip.hidden = !state.attachments.length;
   strip.innerHTML = state.attachments.map((file, index) => `<span>▧ ${escapeText(file.name)} <button type="button" data-remove-attachment="${index}">×</button></span>`).join("");
 }
-async function openFile(path) {
+async function openFile(path, row) {
+  $$(".tree [data-file]").forEach((item) => item.classList.toggle("selected", item === row));
+  setButtonBusy(row, true); $("#file-viewer-path").textContent = path; $("#file-viewer-content").textContent = "Loading file..."; switchView("file");
   try {
     const response = await request("fs/readFile", { path }); const bytes = Uint8Array.from(atob(response.dataBase64), (char) => char.charCodeAt(0));
-    const content = new TextDecoder().decode(bytes); switchView("chat"); addMessage("tool", `SOURCE VIEWER // ${path.split("/").pop()}`, content.slice(0, 20000) + (content.length > 20000 ? "\n[truncated]" : ""));
-  } catch (error) { addMessage("system", "FILE ERROR", errorMessage(error)); }
+    const content = new TextDecoder().decode(bytes); const limit = 250000;
+    $("#file-viewer-content").textContent = content.slice(0, limit) + (content.length > limit ? "\n\n[File truncated after 250,000 characters]" : "");
+  } catch (error) { $("#file-viewer-content").textContent = `Could not open file.\n\n${errorMessage(error)}`; }
+  finally { setButtonBusy(row, false); }
 }
 
 function promptText(title, label, value, callback) { state.textAction = callback; $("#text-dialog-title").textContent = title; $("#text-label").firstChild.textContent = label; $("#text-value").value = value; $("#text-dialog").showModal(); $("#text-value").focus(); }
@@ -363,7 +427,7 @@ $("#explorer").addEventListener("click", (event) => {
   const moreProject = event.target.closest("[data-show-project]"); if (moreProject) { const cwd = moreProject.dataset.showProject; state.projectLimits.set(cwd, (state.projectLimits.get(cwd) || 5) + 10); renderThreads(); return; }
   if (event.target.closest("[data-show-chats]")) { state.chatLimit += 10; renderThreads(); }
 });
-$(".tree").addEventListener("click", (event) => { const file = event.target.closest("[data-file]"); if (file) openFile(file.dataset.file); });
+$(".tree").addEventListener("click", (event) => { const file = event.target.closest("[data-file]"); if (file) openFile(file.dataset.file, file); });
 $("#attachment-strip").addEventListener("click", (event) => { const button = event.target.closest("[data-remove-attachment]"); if (button) { state.attachments.splice(Number(button.dataset.removeAttachment), 1); renderAttachments(); } });
 $("#attachment-input").addEventListener("change", (event) => { addAttachments(event.target.files); event.target.value = ""; });
 $$('[data-close]').forEach((button) => button.addEventListener("click", () => $(`#${button.dataset.close}`).close()));
@@ -381,6 +445,6 @@ $("#palette-search").addEventListener("input", (event) => renderPalette(event.ta
 $("#model").addEventListener("change", () => { $("#status-model").textContent = `MODEL: ${$("#model").selectedOptions[0].textContent.toUpperCase()}`; });
 $("#mode").addEventListener("change", () => { $("#composer-mode").textContent = `${$("#mode").selectedOptions[0].textContent.toUpperCase()} MODE`; });
 document.addEventListener("keydown", (event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openPalette(); } });
-state.cwd = decodeURIComponent(location.hash.slice(1)) || "/Users/jagatees/Documents/Codex-UI-Window-80-Style"; $("#cwd").value = state.cwd;
-setInterval(() => { $("#clock").textContent = timestamp(); }, 1000); $("#clock").textContent = timestamp();
+state.cwd = decodeURIComponent(location.hash.slice(1)) || "."; $("#cwd").value = state.cwd;
+setInterval(() => { $("#clock").textContent = timestamp(); updateSessionTimer(); }, 1000); $("#clock").textContent = timestamp(); updateSessionTimer();
 connect();
